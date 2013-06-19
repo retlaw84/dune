@@ -32,9 +32,6 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
-// Local headers.
-#include "HTTPClient.hpp"
-
 namespace Vision
 {
   namespace Lumenera

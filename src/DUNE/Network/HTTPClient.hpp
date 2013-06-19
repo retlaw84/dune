@@ -22,28 +22,64 @@
 // language governing permissions and limitations at                        *
 // https://www.lsts.pt/dune/licence.                                        *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
+// Author: Renato Caldas                                                    *
 //***************************************************************************
 
-#ifndef DUNE_NETWORK_HPP_INCLUDED_
-#define DUNE_NETWORK_HPP_INCLUDED_
+#ifndef DUNE_NETWORK_HTTP_CLIENT_HPP_INCLUDED_
+#define DUNE_NETWORK_HTTP_CLIENT_HPP_INCLUDED_
+
+// ISO C++ 98 headers.
+#include <cstring>
+#include <iostream>
+
+// DUNE headers.
+#include <DUNE/Concurrency/TSQueue.hpp>
+#include <DUNE/Concurrency/Thread.hpp>
+#include <DUNE/Network/TCPSocket.hpp>
+#include <DUNE/Network/HTTPRequestHandler.hpp>
 
 namespace DUNE
 {
-  //! Networking routines and classes.
   namespace Network
-  { }
+  {
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM HTTPClient;
+
+    class HTTPClient
+    {
+    public:
+      HTTPClient(const char* request, Address address, unsigned port = 80);
+
+      void
+      getHeader(std::vector<std::string>& dst, double timeout = 2.0);
+
+      void
+      getBody(std::vector<std::string>& dst, double timeout = 2.0);
+
+      void
+      skipToBoundary(std::string boundary, double timeout = 2.0);
+
+      void
+      getBinary(char* bfr, size_t len, double timeout = 2.0);
+
+    private:
+      // Reception buffer length
+      static const size_t c_bfrlen = 128;
+      // TCP socket
+      TCPSocket m_socket;
+      // I/O multiplexing
+      System::IOMultiplexing m_iom;
+      // Incomming buffer
+      char m_bfr[c_bfrlen];
+      // Length of incomming buffer
+      size_t m_bfr_len;
+
+      void
+      readLine(std::string& dst, double timeout = 2.0);
+
+      void
+      readBinary(char* bfr, size_t len, double timeout = 2.0);
+    };
+  }
 }
-
-#include <DUNE/Network/Initializer.hpp>
-#include <DUNE/Network/URL.hpp>
-#include <DUNE/Network/Address.hpp>
-#include <DUNE/Network/Exceptions.hpp>
-#include <DUNE/Network/UDPSocket.hpp>
-#include <DUNE/Network/TCPSocket.hpp>
-#include <DUNE/Network/HTTPClient.hpp>
-#include <DUNE/Network/HTTPServer.hpp>
-#include <DUNE/Network/HTTPRequestHandler.hpp>
-#include <DUNE/Network/Interface.hpp>
-
 #endif
