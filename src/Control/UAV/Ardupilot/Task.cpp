@@ -131,6 +131,8 @@ namespace Control
         //! Parser Variables
         mavlink_message_t m_msg;
         float m_desired_radius;
+        //! Control references
+        float m_d_roll, m_d_speed, m_d_alt;
 
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
@@ -148,7 +150,10 @@ namespace Control
           m_current_wp(0),
           m_critical(false),
           m_cloops(0),
-          m_desired_radius(0)
+          m_desired_radius(0),
+          m_d_roll(0),
+          m_d_speed(0),
+          m_d_alt(0)
         {
           param("Communications Timeout", m_args.comm_timeout)
           .minimumValue("1")
@@ -222,6 +227,7 @@ namespace Control
           // Setup processing of IMC messages
           bind<DesiredPath>(this);
           bind<DesiredRoll>(this);
+          bind<DesiredSpeed>(this);
           bind<SetServoPosition>(this);
           bind<SimulatedState>(this);
           bind<Acceleration>(this);
@@ -463,7 +469,24 @@ namespace Control
         }
 
         void
-        consume(const IMC::DesiredRoll* roll)
+        updateControl(void)
+        {
+          uint8_t buf[512];
+
+          mavlink_message_t* msg = new mavlink_message_t;
+          mavlink_msg_set_roll_pitch_yaw_thrust_pack(255, 0, msg,
+              1,
+              1,
+              m_d_roll,
+              m_d_alt,
+              0,
+              m_d_speed);
+          uint16_t n = mavlink_msg_to_send_buffer(buf, msg);
+          sendData(buf, n);
+        }
+
+        void
+        consume(const IMC::DesiredRoll* desired_roll)
         {
           if (!(m_cloops & IMC::CL_ROLL))
           {
@@ -471,19 +494,8 @@ namespace Control
             return;
           }
 
-          uint8_t buf[512];
-
-          mavlink_message_t* msg = new mavlink_message_t;
-          mavlink_msg_set_roll_pitch_yaw_thrust_pack(255, 0, msg,
-              1,
-              1,
-              (float)roll->value,
-              0,
-              0,
-              0);
-          uint16_t n = mavlink_msg_to_send_buffer(buf, msg);
-          sendData(buf, n);
-          debug("DesiredRoll packet sent to Ardupilot: %f", roll->value);
+          m_d_roll = (float)desired_roll->value;
+          updateControl();
         }
 
         void
@@ -495,15 +507,29 @@ namespace Control
             return;
           }
 
-          sendCommandPacket(MAV_CMD_CONDITION_CHANGE_ALT, // Ascend/descend at rate.  Delay mission state machine until desired altitude reached.
-                            0, // Descent / Ascend rate (m/s)
-                            0, // Empty
-                            0, // Empty
-                            0, // Empty
-                            0, // Empty
-                            0, // Empty
-                            desired_z->value); // Finish Altitude
-          debug("DesiredZ packet sent to Ardupilot");
+          m_d_alt = (float)desired_z->value;
+
+          if(desired_z->z_units != IMC::Z_HEIGHT)
+            m_d_alt = m_args.alt;
+
+          updateControl();
+        }
+
+        void
+        consume(const IMC::DesiredSpeed* desired_speed)
+        {
+          if (!(m_cloops & IMC::CL_SPEED))
+          {
+            err(DTR("speed control is NOT active"));
+            return;
+          }
+
+          m_d_speed = (float)desired_speed->value;
+
+          if(desired_speed->speed_units != IMC::SUNITS_METERS_PS)
+            m_d_speed = m_args.speed;
+
+          updateControl();
         }
 
         void
